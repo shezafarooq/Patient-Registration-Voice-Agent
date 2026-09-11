@@ -1,6 +1,6 @@
 # Patient Registration Voice Agent
 
-A small FastAPI service for a voice-based patient-registration agent. It validates and persists U.S. patient demographics in SQLite, exposes the required REST API, and includes a Vapi-ready prompt and create-patient tool definition.
+A small FastAPI service for a voice-based patient-registration agent. It validates and persists U.S. patient demographics in PostgreSQL, exposes the required REST API, and includes a Vapi-ready prompt and create-patient tool definition.
 
 ## Architecture
 
@@ -8,7 +8,7 @@ A small FastAPI service for a voice-based patient-registration agent. It validat
 Caller -> Vapi phone number -> Vapi assistant (LLM/STT/TTS)
                                   | confirmed tool call
                                   v
-                         FastAPI /patients -> SQLite persistent volume
+                         FastAPI /patients -> PostgreSQL database
 ```
 
 The assistant owns conversational collection and confirmation. The API remains the source of truth for validation and persistence, so malformed tool calls cannot create invalid records.
@@ -58,7 +58,7 @@ curl -X POST http://127.0.0.1:8000/patients \
 
 ## Configure Vapi
 
-1. Deploy this service first and set `DATABASE_URL` to a SQLite file on the host's persistent disk, for example `sqlite:////var/data/patients.db`.
+1. Deploy this service first and set `DATABASE_URL` to your hosting provider's PostgreSQL internal database URL. For SQLAlchemy, use the `postgresql+psycopg2://...` form.
 2. In Vapi, create an assistant and paste [the system prompt](docs/vapi-system-prompt.md) into its system message.
 3. Add a server URL function tool for `POST https://YOUR-API/patients`. Use [the tool schema](docs/vapi-tool.json), replacing the placeholder URL. Configure it to pass the JSON body directly to the endpoint.
 4. Provision a U.S. number in Vapi and attach it to this assistant. Test in the Vapi simulator before placing a phone call.
@@ -73,11 +73,11 @@ curl -X POST http://127.0.0.1:8000/patients \
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `DATABASE_URL` | No | Defaults to `sqlite:///./data/patients.db`. Production must point at persistent storage. |
+| `DATABASE_URL` | Yes in production | PostgreSQL connection URL, for example `postgresql+psycopg2://USER:PASSWORD@HOST:5432/DATABASE`. |
 | `ALLOWED_ORIGINS` | No | Reserved for a browser dashboard; not needed by Vapi server tools. |
 
 ## Trade-offs and limitations
 
-- SQLite is the fastest dependable choice for a single-instance demo. Use PostgreSQL and migrations for concurrent production deployments.
+- PostgreSQL is used for persistence in production. This project creates tables at startup for demo speed; use a migration tool such as Alembic for a production system.
 - The API logs registration IDs and phone numbers to stdout for the requested observability. Do not use these logs or this demo configuration for real protected health information without a compliant operational design.
 - Vapi credentials are intentionally configured in Vapi, not committed to this repository. Add request authentication before exposing the API beyond the assessment environment.

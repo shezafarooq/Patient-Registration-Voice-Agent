@@ -1,3 +1,8 @@
+import os
+
+# Never let tests use the deployment database configured in .env.
+os.environ["DATABASE_URL"] = "sqlite:///./data/test_patients.db"
+
 from fastapi.testclient import TestClient
 
 from app.database import Base, engine
