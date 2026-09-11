@@ -1,0 +1,43 @@
+from fastapi.testclient import TestClient
+
+from app.database import Base, engine
+from app.main import app
+
+client = TestClient(app)
+
+
+def patient_payload():
+    return {
+        "first_name": "Jane", "last_name": "O'Connor", "date_of_birth": "05/12/1990", "sex": "Female",
+        "phone_number": "(202) 555-0148", "email": "jane@example.com", "address_line_1": "123 Main Street",
+        "city": "Washington", "state": "dc", "zip_code": "20001",
+    }
+
+
+def setup_function():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+
+def test_create_and_retrieve_patient():
+    created = client.post("/patients", json=patient_payload())
+    assert created.status_code == 201
+    record = created.json()["data"]
+    assert record["phone_number"] == "2025550148"
+    retrieved = client.get(f"/patients/{record['patient_id']}")
+    assert retrieved.status_code == 200
+    assert retrieved.json()["data"]["last_name"] == "O'Connor"
+
+
+def test_invalid_future_dob_returns_envelope():
+    response = client.post("/patients", json=patient_payload() | {"date_of_birth": "01/01/2999"})
+    assert response.status_code == 422
+    assert response.json()["data"] is None
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_soft_deleted_patient_is_not_listed():
+    created = client.post("/patients", json=patient_payload()).json()["data"]
+    assert client.delete(f"/patients/{created['patient_id']}").status_code == 200
+    assert client.get(f"/patients/{created['patient_id']}").status_code == 404
+    assert client.get("/patients").json()["data"] == []
