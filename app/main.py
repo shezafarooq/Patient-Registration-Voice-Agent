@@ -91,7 +91,7 @@ def list_patients(
 ):
     statement = select(Patient).where(Patient.deleted_at.is_(None)).order_by(Patient.created_at.desc())
     if last_name:
-        statement = statement.where(Patient.last_name.ilike(last_name.strip()))
+        statement = statement.where(Patient.last_name.ilike(f"%{last_name.strip()}%"))
     if date_of_birth:
         try:
             statement = statement.where(Patient.date_of_birth == parse_date_of_birth(date_of_birth))

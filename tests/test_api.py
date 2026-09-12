@@ -36,10 +36,18 @@ def test_create_and_retrieve_patient():
     assert retrieved.json()["data"]["last_name"] == "O'Connor"
 
 
+def test_last_name_filter_supports_partial_case_insensitive_search():
+    client.post("/patients", json=patient_payload())
+    response = client.get("/patients", params={"last_name": "conn"})
+    assert response.status_code == 200
+    assert response.json()["data"][0]["last_name"] == "O'Connor"
+
+
 def test_dashboard_is_served_from_the_api():
     response = client.get("/")
     assert response.status_code == 200
     assert "Patient Registry" in response.text
+    assert "Add patient" in response.text
     assert client.get("/static/dashboard.js").status_code == 200
 
 
