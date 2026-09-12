@@ -20,7 +20,20 @@ type Patient = {
   updated_at: string;
 };
 
-type ApiEnvelope<T> = { data: T; error: null } | { data: null; error: { message: string } };
+type ApiEnvelope<T> = {
+  data: T;
+  error: null;
+} | {
+  data: null;
+  error: { message: string; details?: Array<{ loc: string[]; msg: string }> };
+};
+
+const US_STATES = new Set([
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY",
+  "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND",
+  "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+]);
+const NAME_PATTERN = /^[A-Za-z]+(?:[ '-][A-Za-z]+)*$/;
 
 const tableBody = document.querySelector<HTMLTableSectionElement>("#patient-table-body")!;
 const tableMessage = document.querySelector<HTMLDivElement>("#table-message")!;
@@ -41,7 +54,7 @@ const filters = {
 };
 
 let patients: Patient[] = [];
-let searchTimer: number | undefined;
+let allPatients: Patient[] = [];
 
 function text(value: string | null | undefined): string {
   return value?.trim() || "Not provided";
@@ -81,10 +94,77 @@ function setFormError(message: string | null): void {
   formError.dataset.visible = String(Boolean(message));
 }
 
+function formControl(name: string): HTMLInputElement | HTMLSelectElement {
+  return form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement;
+}
+
+function validatePatientForm(payload: Record<string, string>): boolean {
+  const errors: Array<{ field: string; message: string }> = [];
+  Array.from(form.elements).forEach((element) => {
+    if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) element.setCustomValidity("");
+  });
+
+  const addError = (field: string, message: string): void => {
+    formControl(field).setCustomValidity(message);
+    errors.push({ field, message });
+  };
+  const trimmed = (field: string): string => payload[field].trim();
+  const validateName = (field: "first_name" | "last_name"): void => {
+    const value = trimmed(field);
+    if (!NAME_PATTERN.test(value) || value.length > 50) addError(field, "Use 1-50 letters, spaces, hyphens, or apostrophes.");
+  };
+
+  validateName("first_name");
+  validateName("last_name");
+
+  const dob = trimmed("date_of_birth");
+  const dateParts = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dob);
+  if (!dateParts) {
+    addError("date_of_birth", "Use a valid past date in MM/DD/YYYY format.");
+  } else {
+    const [, month, day, year] = dateParts;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (parsed.getFullYear() !== Number(year) || parsed.getMonth() !== Number(month) - 1 || parsed.getDate() !== Number(day) || parsed > today) {
+      addError("date_of_birth", "Use a valid past date in MM/DD/YYYY format.");
+    }
+  }
+
+  const validatePhone = (field: "phone_number" | "emergency_contact_phone", required: boolean): void => {
+    const digits = payload[field].replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+    if ((!required && !digits) || (digits.length === 10 && !"01".includes(digits[0]) && !"01".includes(digits[3]))) return;
+    addError(field, "Enter a valid 10-digit U.S. phone number.");
+  };
+  validatePhone("phone_number", true);
+  validatePhone("emergency_contact_phone", false);
+
+  payload.state = trimmed("state").toUpperCase();
+  if (!US_STATES.has(payload.state)) addError("state", "Enter a valid two-letter U.S. state abbreviation.");
+  if (!/^\d{5}(?:-\d{4})?$/.test(trimmed("zip_code"))) addError("zip_code", "Enter a 5-digit ZIP code or ZIP+4.");
+  if (trimmed("insurance_member_id") && !/^[A-Za-z0-9-]+$/.test(trimmed("insurance_member_id"))) {
+    addError("insurance_member_id", "Member ID may contain letters, numbers, and hyphens only.");
+  }
+  if (trimmed("preferred_language").length > 100) addError("preferred_language", "Preferred language must be at most 100 characters.");
+  if (trimmed("emergency_contact_name") && !NAME_PATTERN.test(trimmed("emergency_contact_name"))) {
+    addError("emergency_contact_name", "Enter a full name using letters, spaces, hyphens, or apostrophes.");
+  }
+
+  if (!errors.length) return true;
+  setFormError(errors[0].message);
+  formControl(errors[0].field).focus();
+  form.reportValidity();
+  return false;
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...options, headers: { Accept: "application/json", ...options?.headers } });
   const result = await response.json() as ApiEnvelope<T>;
-  if (!response.ok || result.error) throw new Error(result.error?.message || "Request failed.");
+  if (!response.ok || result.error) {
+    const detail = result.error?.details?.[0];
+    const field = detail?.loc.at(-1)?.replaceAll("_", " ");
+    throw new Error(detail ? `${field}: ${detail.msg.replace(/^Value error, /, "")}` : (result.error?.message || "Request failed."));
+  }
   return result.data;
 }
 
@@ -101,6 +181,20 @@ function renderRows(records: Patient[]): void {
       <td><button class="view-button" type="button" data-patient-id="${patient.patient_id}">View</button></td>`;
     tableBody.append(row);
   });
+}
+
+function applyFilters(): void {
+  const lastName = filters.last_name.value.trim().toLocaleLowerCase();
+  const dateOfBirth = filters.date_of_birth.value.trim();
+  const phoneNumber = filters.phone_number.value.replace(/\D/g, "");
+  patients = allPatients.filter((patient) => (
+    (!lastName || patient.last_name.toLocaleLowerCase().includes(lastName))
+    && (!dateOfBirth || formatDate(patient.date_of_birth).includes(dateOfBirth))
+    && (!phoneNumber || patient.phone_number.includes(phoneNumber))
+  ));
+  renderRows(patients);
+  count.textContent = `${patients.length} patient${patients.length === 1 ? "" : "s"}`;
+  setMessage(patients.length ? null : "No active patient records match these filters.");
 }
 
 function openPatient(patientId: string): void {
@@ -131,21 +225,16 @@ function openPatient(patientId: string): void {
 }
 
 async function loadPatients(): Promise<void> {
-  const query = new URLSearchParams();
-  Object.entries(filters).forEach(([name, input]) => {
-    if (input.value.trim()) query.set(name, input.value.trim());
-  });
   setMessage("Loading patient records...");
   setConnection("Loading", "loading");
   try {
-    patients = await request<Patient[]>(`/patients?${query.toString()}`);
-    renderRows(patients);
-    count.textContent = `${patients.length} patient${patients.length === 1 ? "" : "s"}`;
+    allPatients = await request<Patient[]>("/patients");
+    applyFilters();
     updated.textContent = `Updated ${new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(new Date())}`;
-    setMessage(patients.length ? null : "No active patient records match these filters.");
     setConnection("Connected", "ready");
   } catch (error) {
     patients = [];
+    allPatients = [];
     renderRows([]);
     count.textContent = "Patients";
     setMessage(error instanceof Error ? error.message : "Unable to load patient records.");
@@ -162,12 +251,9 @@ document.querySelector("#add-patient-button")!.addEventListener("click", () => {
 });
 document.querySelector("#clear-filters")!.addEventListener("click", () => {
   Object.values(filters).forEach((input) => { input.value = ""; });
-  void loadPatients();
+  applyFilters();
 });
-Object.values(filters).forEach((input) => input.addEventListener("input", () => {
-  window.clearTimeout(searchTimer);
-  searchTimer = window.setTimeout(() => void loadPatients(), 350);
-}));
+Object.values(filters).forEach((input) => input.addEventListener("input", applyFilters));
 tableBody.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-patient-id]");
   if (button) openPatient(button.dataset.patientId!);
@@ -188,6 +274,7 @@ form.addEventListener("submit", async (event) => {
   submitButton.disabled = true;
   try {
     const payload = Object.fromEntries(new FormData(form).entries());
+    if (!validatePatientForm(payload)) return;
     await request<Patient>("/patients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
