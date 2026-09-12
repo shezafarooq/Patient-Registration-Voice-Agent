@@ -94,15 +94,20 @@ function setFormError(message: string | null): void {
   formError.dataset.visible = String(Boolean(message));
 }
 
+function clearFormValidation(): void {
+  Array.from(form.elements).forEach((element) => {
+    if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) element.setCustomValidity("");
+  });
+  setFormError(null);
+}
+
 function formControl(name: string): HTMLInputElement | HTMLSelectElement {
   return form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement;
 }
 
 function validatePatientForm(payload: Record<string, string>): boolean {
   const errors: Array<{ field: string; message: string }> = [];
-  Array.from(form.elements).forEach((element) => {
-    if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) element.setCustomValidity("");
-  });
+  clearFormValidation();
 
   const addError = (field: string, message: string): void => {
     formControl(field).setCustomValidity(message);
@@ -245,7 +250,7 @@ async function loadPatients(): Promise<void> {
 document.querySelector("#refresh-button")!.addEventListener("click", () => void loadPatients());
 document.querySelector("#add-patient-button")!.addEventListener("click", () => {
   form.reset();
-  setFormError(null);
+  clearFormValidation();
   formDialog.showModal();
   (form.elements.namedItem("first_name") as HTMLInputElement).focus();
 });
@@ -266,6 +271,20 @@ dialog.addEventListener("click", (event) => {
 });
 formDialog.addEventListener("click", (event) => {
   if (event.target === formDialog) formDialog.close();
+});
+form.addEventListener("input", (event) => {
+  const control = event.target;
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
+    control.setCustomValidity("");
+    setFormError(null);
+  }
+});
+form.addEventListener("change", (event) => {
+  const control = event.target;
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
+    control.setCustomValidity("");
+    setFormError(null);
+  }
 });
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

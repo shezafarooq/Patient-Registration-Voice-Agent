@@ -27,10 +27,14 @@ function formatTimestamp(value) { return new Intl.DateTimeFormat("en-US", { date
 function setMessage(message) { tableMessage.textContent = message || ""; tableMessage.dataset.visible = String(Boolean(message)); }
 function setConnection(label, state) { connection.textContent = label; connection.dataset.state = state; }
 function setFormError(message) { formError.textContent = message || ""; formError.dataset.visible = String(Boolean(message)); }
+function clearFormValidation() {
+  Array.from(form.elements).forEach((element) => { if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) element.setCustomValidity(""); });
+  setFormError(null);
+}
 function formControl(name) { return form.elements.namedItem(name); }
 function validatePatientForm(payload) {
   const errors = [];
-  Array.from(form.elements).forEach((element) => { if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) element.setCustomValidity(""); });
+  clearFormValidation();
   const addError = (field, message) => { formControl(field).setCustomValidity(message); errors.push({ field, message }); };
   const trimmed = (field) => payload[field].trim();
   const validateName = (field) => { const value = trimmed(field); if (!NAME_PATTERN.test(value) || value.length > 50) addError(field, "Use 1-50 letters, spaces, hyphens, or apostrophes."); };
@@ -106,7 +110,7 @@ async function loadPatients() {
   }
 }
 document.querySelector("#refresh-button").addEventListener("click", () => void loadPatients());
-document.querySelector("#add-patient-button").addEventListener("click", () => { form.reset(); setFormError(null); formDialog.showModal(); form.elements.namedItem("first_name").focus(); });
+document.querySelector("#add-patient-button").addEventListener("click", () => { form.reset(); clearFormValidation(); formDialog.showModal(); form.elements.namedItem("first_name").focus(); });
 document.querySelector("#clear-filters").addEventListener("click", () => { Object.values(filters).forEach((input) => { input.value = ""; }); applyFilters(); });
 Object.values(filters).forEach((input) => input.addEventListener("input", applyFilters));
 tableBody.addEventListener("click", (event) => { const button = event.target.closest("[data-patient-id]"); if (button) openPatient(button.dataset.patientId); });
@@ -115,6 +119,14 @@ document.querySelector("#close-form-dialog").addEventListener("click", () => for
 document.querySelector("#cancel-form").addEventListener("click", () => formDialog.close());
 dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
 formDialog.addEventListener("click", (event) => { if (event.target === formDialog) formDialog.close(); });
+form.addEventListener("input", (event) => {
+  const control = event.target;
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) { control.setCustomValidity(""); setFormError(null); }
+});
+form.addEventListener("change", (event) => {
+  const control = event.target;
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) { control.setCustomValidity(""); setFormError(null); }
+});
 form.addEventListener("submit", async (event) => {
   event.preventDefault(); setFormError(null);
   const submitButton = form.querySelector("[type=submit]");
