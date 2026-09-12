@@ -51,6 +51,7 @@ def test_empty_optional_tool_values_are_stored_as_null():
             "address_line_2": "   ",
             "insurance_provider": "",
             "insurance_member_id": "",
+            "preferred_language": "   ",
             "emergency_contact_name": "",
             "emergency_contact_phone": "",
         },
@@ -65,6 +66,7 @@ def test_empty_optional_tool_values_are_stored_as_null():
         "emergency_contact_name",
         "emergency_contact_phone",
     ))
+    assert record["preferred_language"] == "English"
 
 
 def test_soft_deleted_patient_is_not_listed():

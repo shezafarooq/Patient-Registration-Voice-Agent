@@ -86,6 +86,11 @@ class PatientFields(BaseModel):
             for key, value in values.items()
         }
 
+    @field_validator("preferred_language", mode="before")
+    @classmethod
+    def default_blank_preferred_language(cls, value: object) -> object:
+        return "English" if isinstance(value, str) and not value.strip() else value
+
     @field_validator("first_name", "last_name")
     @classmethod
     def validate_name(cls, value: str) -> str:
