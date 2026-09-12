@@ -2,7 +2,7 @@ import re
 from datetime import date, datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator, model_validator
 
 NAME_PATTERN = re.compile(r"^[A-Za-z]+(?:[ '-][A-Za-z]+)*$")
 MEMBER_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
@@ -11,6 +11,14 @@ US_STATES = {
     "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY",
     "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND",
     "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+}
+OPTIONAL_STRING_FIELDS = {
+    "email",
+    "address_line_2",
+    "insurance_provider",
+    "insurance_member_id",
+    "emergency_contact_name",
+    "emergency_contact_phone",
 }
 
 
@@ -67,6 +75,16 @@ class PatientFields(BaseModel):
     preferred_language: str = "English"
     emergency_contact_name: str | None = None
     emergency_contact_phone: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_empty_optional_fields(cls, values: object) -> object:
+        if not isinstance(values, dict):
+            return values
+        return {
+            key: None if key in OPTIONAL_STRING_FIELDS and isinstance(value, str) and not value.strip() else value
+            for key, value in values.items()
+        }
 
     @field_validator("first_name", "last_name")
     @classmethod
@@ -163,6 +181,16 @@ class PatientUpdate(BaseModel):
     preferred_language: str | None = None
     emergency_contact_name: str | None = None
     emergency_contact_phone: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_empty_optional_fields(cls, values: object) -> object:
+        if not isinstance(values, dict):
+            return values
+        return {
+            key: None if key in OPTIONAL_STRING_FIELDS and isinstance(value, str) and not value.strip() else value
+            for key, value in values.items()
+        }
 
 
 class PatientResponse(PatientFields):

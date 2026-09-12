@@ -1,7 +1,8 @@
 import os
 
 # Never let tests use the deployment database configured in .env.
-os.environ["DATABASE_URL"] = "sqlite:///./data/test_patients.db"
+# This temporary file is outside the repository and is never used by the app.
+os.environ["DATABASE_URL"] = "sqlite:////tmp/patient-registration-agent-test.db"
 
 from fastapi.testclient import TestClient
 
@@ -22,6 +23,7 @@ def patient_payload():
 def setup_function():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    engine.dispose()
 
 
 def test_create_and_retrieve_patient():
@@ -39,6 +41,30 @@ def test_invalid_future_dob_returns_envelope():
     assert response.status_code == 422
     assert response.json()["data"] is None
     assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_empty_optional_tool_values_are_stored_as_null():
+    response = client.post(
+        "/patients",
+        json=patient_payload() | {
+            "email": "",
+            "address_line_2": "   ",
+            "insurance_provider": "",
+            "insurance_member_id": "",
+            "emergency_contact_name": "",
+            "emergency_contact_phone": "",
+        },
+    )
+    assert response.status_code == 201
+    record = response.json()["data"]
+    assert all(record[field] is None for field in (
+        "email",
+        "address_line_2",
+        "insurance_provider",
+        "insurance_member_id",
+        "emergency_contact_name",
+        "emergency_contact_phone",
+    ))
 
 
 def test_soft_deleted_patient_is_not_listed():
