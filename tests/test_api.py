@@ -36,6 +36,13 @@ def test_create_and_retrieve_patient():
     assert retrieved.json()["data"]["last_name"] == "O'Connor"
 
 
+def test_dashboard_is_served_from_the_api():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Patient Registry" in response.text
+    assert client.get("/static/dashboard.js").status_code == 200
+
+
 def test_invalid_future_dob_returns_envelope():
     response = client.post("/patients", json=patient_payload() | {"date_of_birth": "01/01/2999"})
     assert response.status_code == 422

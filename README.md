@@ -25,12 +25,22 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-The API is available at `http://127.0.0.1:8000`; interactive OpenAPI documentation is at `/docs`.
+The dashboard is available at `http://127.0.0.1:8000`; interactive OpenAPI documentation is at `/docs`.
 
 ```bash
 pytest
 curl http://127.0.0.1:8000/health
 ```
+
+## Dashboard
+
+The TypeScript dashboard is served by FastAPI at `/`. It lists active patients, filters by last name, date of birth, or phone number, and opens a full patient record from the table. It uses the existing `GET /patients` endpoint, so no separate frontend deployment or environment configuration is needed.
+
+The source is [dashboard.ts](app/static/dashboard.ts); [dashboard.js](app/static/dashboard.js) is the browser-ready asset served in production. There is no Node build dependency in the deployment.
+
+## Tests
+
+The automated API tests cover patient creation and retrieval, invalid future dates, empty optional tool values, soft deletion, and dashboard asset delivery.
 
 ## API
 

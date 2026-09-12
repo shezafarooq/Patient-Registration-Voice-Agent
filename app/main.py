@@ -1,12 +1,15 @@
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,6 +28,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Patient Registration API", version="0.1.0", lifespan=lifespan)
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 def success(data):
@@ -70,6 +75,11 @@ async def validation_error_handler(_: Request, error: RequestValidationError):
 @app.get("/health")
 def health_check():
     return success({"status": "ok"})
+
+
+@app.get("/", include_in_schema=False)
+def dashboard():
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/patients")
